@@ -5,7 +5,7 @@ import zlib from "zlib";
 import AWS from "aws-sdk";
 import cheerio from "cheerio";
 import { v4 } from "uuid";
-import puppeteer from "puppeteer";
+import puppeteer, { HTTPRequest } from "puppeteer";
 import querystring from "querystring";
 import _debug from "debug";
 import { CLIError } from "./CLIError";
@@ -634,6 +634,11 @@ export const login = {
         await mkdirp(paths.chromium);
         args.push(`--user-data-dir=${paths.chromium}`);
       }
+
+      if (process.env.https_proxy) {
+        args.push(`--proxy-server=${process.env.https_proxy}`);
+      }
+
       const ignoreDefaultArgs = noDisableExtensions
         ? ["--disable-extensions"]
         : [];
@@ -654,7 +659,7 @@ export const login = {
       // Prevent redirection to AWS
       let samlResponseData;
       const samlResponsePromise = new Promise((resolve) => {
-        page.on("request", (req) => {
+        page.on("request", (req: HTTPRequest) => {
           const reqURL = req.url();
           debug(`Request: ${url}`);
           if (
@@ -662,12 +667,13 @@ export const login = {
             reqURL === AWS_GOV_SAML_ENDPOINT ||
             reqURL === AWS_CN_SAML_ENDPOINT
           ) {
-            resolve();
+            resolve(undefined);
             samlResponseData = req.postData();
             // eslint-disable-next-line @typescript-eslint/no-floating-promises
             req.respond({
               status: 200,
               contentType: "text/plain",
+              headers: {},
               body: "",
             });
             if (browser) {
